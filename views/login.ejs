@@ -1,0 +1,37 @@
+<%- include('partials/head') %>
+<%- include('partials/navbar', { user: (typeof user !== 'undefined' ? user : null) }) %>
+
+<div class="container">
+  <div id="mainContent">
+    <div class="row justify-content-center mt-4">
+      <div class="col-md-6">
+        <h2 class="page-title">Login</h2>
+
+        <% if (errors && errors.length > 0) { %>
+          <div class="alert alert-danger"><% errors.forEach(function(error){ %><p class="mb-1"><%= error %></p><% }) %></div>
+        <% } %>
+
+        <% if (messages && messages.length > 0) { %>
+          <div class="alert alert-success"><% messages.forEach(function(message){ %><p class="mb-1"><%= message %></p><% }) %></div>
+        <% } %>
+
+        <form action="/login" method="POST" class="mt-4">
+          <div class="mb-3">
+            <label for="email" class="form-label">Email Address</label>
+            <input type="email" id="email" name="email" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" id="password" name="password" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Login</button>
+        </form>
+
+        <div class="text-center mt-4"><p>Don't have an account? <a href="/register" class="text-decoration-none">Register here</a></p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
+

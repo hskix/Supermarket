@@ -1,0 +1,67 @@
+<%- include('partials/head') %>
+<%- include('partials/navbar', { user: (typeof user !== 'undefined' ? user : null) }) %>
+
+<div class="container">
+  <div id="mainContent">
+    <div class="text-center mt-3">
+      <div class="alert alert-success" role="alert">
+        <h2 class="mb-3">Checkout Successful</h2>
+        <p><%= message %></p>
+      </div>
+    </div>
+
+    <% if (orderId && cartItems && cartItems.length > 0) { %>
+      <div class="invoice">
+        <div class="invoice-header">
+          <div>
+            <div class="invoice-title">📄 INVOICE</div>
+            <p style="color: var(--muted); margin:5px 0 0 0;">Supermarket App</p>
+          </div>
+          <div class="order-number">
+            <h3>Order #<%= orderId %></h3>
+            <p><%= orderDate %></p>
+          </div>
+        </div>
+
+        <!-- simplified invoice content -->
+        <div class="invoice-section">
+          <div class="invoice-section-title">Bill To</div>
+          <p style="margin: 0;"><strong><%= user.username %></strong></p>
+          <p style="margin: 5px 0;"><%= user.email %></p>
+          <p style="margin: 5px 0;"><%= user.address || 'N/A' %></p>
+        </div>
+
+        <div class="invoice-section">
+          <div class="invoice-section-title">Order Items</div>
+          <table class="item-table">
+            <thead>
+              <tr><th>Product</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr>
+            </thead>
+            <tbody>
+              <% cartItems.forEach(item => { %>
+                <tr>
+                  <td><%= item.productName %></td>
+                  <td style="text-align:center"><%= item.quantity %></td>
+                  <td style="text-align:right">$<%= parseFloat(item.unit_price).toFixed(2) %></td>
+                  <td style="text-align:right"><strong>$<%= (item.quantity * item.unit_price).toFixed(2) %></strong></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="total-section">
+          <div class="total-row"><span>Subtotal:</span><span>$<%= total %></span></div>
+          <div class="grand-total"><div style="display:flex;justify-content:flex-end;gap:50px"><span>Grand Total:</span><span style="min-width:100px;text-align:right">$<%= total %></span></div></div>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="mt-4 text-center">
+      <a href="/shopping" class="btn btn-primary me-2">Continue Shopping</a>
+      <a href="/order-history" class="btn btn-info">View Order History</a>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,23 @@
+<% if (errors && errors.length > 0) { %>
+  <div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <strong>Errors:</strong>
+    <ul class="mb-0">
+      <% errors.forEach(function(error) { %>
+        <li><%= error %></li>
+      <% }); %>
+    </ul>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+<% } %>
+
+<% if (messages && messages.length > 0) { %>
+  <div class="alert alert-success alert-dismissible fade show" role="alert">
+    <strong>Success:</strong>
+    <ul class="mb-0">
+      <% messages.forEach(function(message) { %>
+        <li><%= message %></li>
+      <% }); %>
+    </ul>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+<% } %>

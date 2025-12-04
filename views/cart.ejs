@@ -1,0 +1,66 @@
+<%- include('partials/head') %>
+<%- include('partials/navbar', { user: (typeof user !== 'undefined' ? user : null) }) %>
+
+<div class="container layout-grid">
+  <div class="main-area" id="mainContent">
+    <div class="welcome-text">Welcome, <strong><%= user.username %></strong></div>
+    <h2 class="page-title">Shopping Cart</h2>
+
+    <% let total = 0; %>
+    <% if (cart.length === 0) { %>
+      <div class="alert alert-info" role="alert">Your cart is empty. <a href="/shopping">Continue shopping</a></div>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th width="80">Image</th>
+              <th width="100">Quantity</th>
+              <th width="100">Price</th>
+              <th width="100">Total</th>
+              <th width="80">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% cart.forEach(item => { %>
+              <tr>
+                <td><strong><%= item.productName %></strong></td>
+                <td><img src="/images/<%= item.image %>" alt="<%= item.productName %>" style="width:60px;height:60px;object-fit:cover;border-radius:5px;"></td>
+                <td>
+                  <form action="/update-quantity/<%= item.product_id %>" method="POST" class="d-flex gap-2">
+                    <input type="number" name="quantity" value="<%= item.quantity %>" min="1" class="form-control form-control-sm" style="width:70px;">
+                    <button class="btn btn-sm btn-primary">Update</button>
+                  </form>
+                </td>
+                <td>$<%= parseFloat(item.unit_price).toFixed(2) %></td>
+                <td><strong>$<%= (item.unit_price * item.quantity).toFixed(2) %></strong></td>
+                <td><a href="/remove-from-cart/<%= item.product_id %>" class="btn btn-sm btn-danger" onclick="return confirm('Remove from cart?')">Remove</a></td>
+              </tr>
+              <% total += item.unit_price * item.quantity; %>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+
+  <aside class="sidebar">
+    <% if (cart.length > 0) { %>
+      <div class="card card-header mb-3">
+        <h5 class="mb-2">Order Summary</h5>
+        <div class="px-3 pb-3">
+          <p class="mb-2">Subtotal: <strong style="float:right;color:var(--accent);">$<%= total.toFixed(2) %></strong></p>
+          <div class="d-grid gap-2">
+            <a href="/shopping" class="btn btn-secondary">Continue Shopping</a>
+            <form action="/checkout" method="POST"><button type="submit" class="btn btn-success">Proceed to Checkout</button></form>
+          </div>
+        </div>
+      </div>
+    <% } %>
+  </aside>
+</div>
+
+<%- include('partials/footer') %>
+
+

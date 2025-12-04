@@ -1,0 +1,104 @@
+<%- include('partials/head') %>
+<%- include('partials/navbar', { user: (typeof user !== 'undefined' ? user : null) }) %>
+
+<div class="container">
+  <div id="mainContent">
+    <style>
+      /* keep page-specific styles here */
+      .search-section { margin-bottom: 40px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+      .product-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap:30px; margin-bottom:40px; }
+      .product-card { background:white; border-radius:10px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.08); transition:all 0.3s ease; }
+      .product-image{ width:100%; height:200px; object-fit:cover; background:linear-gradient(135deg,#f5f7fa 0%,#c3cfe2 100%);}      
+      .view-cart-btn{ position: fixed; bottom:30px; right:30px; background:linear-gradient(135deg,var(--brown-700) 0%,var(--brown-800) 100%); color:white; padding:15px 25px; border:none; border-radius:50px; font-weight:bold; text-decoration:none; z-index:1000; }
+    </style>
+
+    <div class="welcome-text mb-4">Welcome, <strong><%= (typeof user !== 'undefined' && user) ? user.username : 'Guest' %></strong>!</div>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="page-title mb-0">Browse Products</h2>
+      <div class="d-flex gap-2 align-items-center">
+        <input type="text" id="searchInput" placeholder="Search by first letter (e.g. A)" onkeyup="filterProducts()" class="form-control" style="width:220px;">
+        <select id="productSort" class="form-select" style="width:220px;">
+          <option value="name-asc">Name A → Z</option>
+          <option value="name-desc">Name Z → A</option>
+          <option value="price-asc">Price Low → High</option>
+          <option value="price-desc">Price High → Low</option>
+        </select>
+      </div>
+    </div>
+
+    <% if(products.length > 0) { %>
+      <div class="product-grid" id="productGrid">
+        <% for(let i = 0; i < products.length; i++) { %>
+          <div class="product-card" data-product-name="<%= products[i].productName.toLowerCase() %>">
+            <img src="/images/<%= products[i].image %>" alt="<%= products[i].productName %>" class="product-image" onerror="this.src='https://via.placeholder.com/250x200?text=<%= products[i].productName %>'">
+            <div class="product-info">
+              <a href="/product/<%= products[i].id %>" class="product-name"><%= products[i].productName %></a>
+              <div class="product-details">
+                <span class="product-price">$<%= (typeof products[i].price === 'number' ? products[i].price : Number(products[i].price || 0)).toFixed(2) %></span>
+                <span class="product-stock <%= products[i].quantity <= 5 ? 'low' : '' %>"><%= products[i].quantity > 0 ? products[i].quantity + ' in stock' : 'Out of stock' %></span>
+              </div>
+              <div class="product-actions">
+                <select class="form-control" id="quantity-<%= products[i].id %>" <%= products[i].quantity <= 0 ? 'disabled' : '' %>>
+                  <% for (let q = 1; q <= Math.min(5, products[i].quantity); q++) { %>
+                    <option value="<%= q %>"><%= q %></option>
+                  <% } %>
+                </select>
+                <form action="/add-to-cart/<%= products[i].id %>" method="POST" style="width:100%;">
+                  <input type="hidden" name="quantity" id="qty-<%= products[i].id %>" value="1">
+                  <button type="submit" class="btn btn-primary" <%= products[i].quantity <= 0 ? 'disabled' : '' %> >
+                    <% if(products[i].quantity > 0) { %>Add to Cart<% } else { %>Unavailable<% } %>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        <% } %>
+      </div>
+      <div id="noResults" class="no-products" style="display:none;"></div>
+    <% } else { %>
+      <div class="alert alert-info mt-4"><p class="mb-0">No products available at the moment.</p></div>
+    <% } %>
+
+    <a href="/cart" class="view-cart-btn">View Cart</a>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
+
+<script>
+  function filterProducts() {
+    const rawInput = document.getElementById('searchInput').value.trim().toLowerCase();
+    const productCards = document.querySelectorAll('.product-card');
+    let visibleCount = 0;
+    let firstChar = '';
+    if (!rawInput) { productCards.forEach(card => card.style.display = 'block'); return; }
+    if (rawInput.length === 1) { firstChar = rawInput.charAt(0); productCards.forEach(card => { const productName = card.getAttribute('data-product-name'); if (productName && productName.charAt(0) === firstChar) { card.style.display = 'block'; visibleCount++; } else { card.style.display = 'none'; } }); }
+    else { productCards.forEach(card => { const productName = card.getAttribute('data-product-name'); if (productName && productName.startsWith(rawInput)) { card.style.display = 'block'; visibleCount++; } else { card.style.display = 'none'; } }); }
+    const noEl = document.getElementById('noResults'); if (visibleCount === 0) { if (noEl) { noEl.textContent = `No products start with "${firstChar.toUpperCase()}".`; noEl.style.display = 'block'; } } else { if (noEl) noEl.style.display = 'none'; }
+  }
+  function resetSearch() { document.getElementById('searchInput').value = ''; filterProducts(); }
+  document.addEventListener('DOMContentLoaded', function() { document.querySelectorAll('select[id^="quantity-"]').forEach(select => { select.addEventListener('change', function() { const productId = this.id.replace('quantity-', ''); document.getElementById('qty-' + productId).value = this.value; }); }); });
+</script>
+
+<script>
+  // Product sort client-side
+  document.addEventListener('DOMContentLoaded', function(){
+    const sort = document.getElementById('productSort');
+    if (!sort) return;
+    const grid = document.getElementById('productGrid');
+    sort.addEventListener('change', function(){
+      if (!grid) return;
+      const cards = Array.from(grid.querySelectorAll('.product-card'));
+      const getName = c => c.querySelector('.product-name').textContent.trim().toLowerCase();
+      const getPrice = c => parseFloat(c.querySelector('.product-price').textContent.replace('$','')) || 0;
+      let sorted = cards;
+      if (sort.value === 'name-asc') sorted = cards.sort((a,b)=> getName(a).localeCompare(getName(b)));
+      if (sort.value === 'name-desc') sorted = cards.sort((a,b)=> getName(b).localeCompare(getName(a)));
+      if (sort.value === 'price-asc') sorted = cards.sort((a,b)=> getPrice(a)-getPrice(b));
+      if (sort.value === 'price-desc') sorted = cards.sort((a,b)=> getPrice(b)-getPrice(a));
+      grid.innerHTML = '';
+      sorted.forEach(c => grid.appendChild(c));
+    });
+  });
+</script>
+
