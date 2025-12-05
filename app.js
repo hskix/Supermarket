@@ -7,6 +7,7 @@ const ProductController = require('./controllers/ProductController');
 const UserController = require('./controllers/UserController');
 const CartController = require('./controllers/CartController');
 const OrderController = require('./controllers/OrderController');
+const ChatController = require('./controllers/ChatController');
 const app = express();
 
 // Set up multer for file uploads
@@ -29,6 +30,9 @@ app.use(express.static('public'));
 app.use(express.urlencoded({
     extended: false
 }));
+
+// Parse JSON bodies for AJAX endpoints (chat)
+app.use(express.json());
 
 //TO DO: Insert code for Session Middleware below 
 app.use(session({
@@ -63,10 +67,12 @@ const checkAdmin = (req, res, next) => {
 
 // Middleware for form validation
 const validateRegistration = (req, res, next) => {
-    const { username, email, password, address, contact, role } = req.body;
+    const { username, email, password, confirmPassword, address, contact, role } = req.body;
 
-    if (!username || !email || !password || !address || !contact || !role) {
-        return res.status(400).send('All fields are required.');
+    if (!username || !email || !password || !confirmPassword || !address || !contact || !role) {
+        req.flash('error', 'All fields are required.');
+        req.flash('formData', req.body);
+        return res.redirect('/register');
     }
     
     if (password.length < 6) {
@@ -74,6 +80,13 @@ const validateRegistration = (req, res, next) => {
         req.flash('formData', req.body);
         return res.redirect('/register');
     }
+
+    if (password !== confirmPassword) {
+        req.flash('error', 'Passwords do not match');
+        req.flash('formData', req.body);
+        return res.redirect('/register');
+    }
+
     next();
 };
 
@@ -122,6 +135,9 @@ app.get('/deleteProduct/:id', ProductController.deleteProduct);
 
 app.post('/checkout', checkAuthenticated, CartController.checkout);
 
+// AI Chat endpoint
+app.post('/api/chat', checkAuthenticated, ChatController.chat);
+
 app.get('/order-history', checkAuthenticated, OrderController.getOrderHistory);
 
 app.get('/order-details/:id', checkAuthenticated, OrderController.getOrderDetails);
@@ -129,6 +145,7 @@ app.get('/order-details/:id', checkAuthenticated, OrderController.getOrderDetail
 app.get('/users', checkAuthenticated, checkAdmin, UserController.getAllUsers);
 
 app.get('/delete-user/:id', checkAuthenticated, checkAdmin, UserController.deleteUser);
+app.get('/make-admin/:id', checkAuthenticated, checkAdmin, UserController.makeAdmin);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));

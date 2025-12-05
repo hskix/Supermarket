@@ -132,3 +132,54 @@ exports.deleteUser = (req, res) => {
         });
     });
 };
+
+// Make a user admin (admin only)
+exports.makeAdmin = (req, res) => {
+    const userId = req.params.id;
+
+    // Fetch the user first
+    User.getById(userId, (error, results) => {
+        if (error) {
+            console.error('Error fetching user for promotion:', error);
+            return res.status(500).send('Error promoting user');
+        }
+
+        if (results.length === 0) {
+            req.flash('error', 'User not found');
+            return res.redirect('/users');
+        }
+
+        const target = results[0];
+
+        if (target.role === 'admin') {
+            req.flash('info', 'User is already an admin');
+            return res.redirect('/users');
+        }
+
+        // Prevent promoting yourself (defensive)
+        if (req.session.user && req.session.user.id == userId) {
+            req.flash('error', 'Cannot change your own role');
+            return res.redirect('/users');
+        }
+
+        // Use the update helper to change role while keeping other fields
+        const updated = {
+            username: target.username,
+            email: target.email,
+            address: target.address,
+            contact: target.contact,
+            role: 'admin'
+        };
+
+        User.update(userId, updated, (err, result) => {
+            if (err) {
+                console.error('Error promoting user to admin:', err);
+                req.flash('error', 'Failed to promote user');
+                return res.redirect('/users');
+            }
+
+            req.flash('success', `${target.username} was promoted to admin`);
+            res.redirect('/users');
+        });
+    });
+};
