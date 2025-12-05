@@ -5,8 +5,10 @@
   "type": "commonjs",
   "scripts": {
     "start": "node app.js"
-  }
-  ,"dependencies": {
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "mysql2": "^3.15.3",
     "node-fetch": "^2.6.7"
   }
 }

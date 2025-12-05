@@ -1,6 +1,7 @@
 const http = require('http');
 const querystring = require('querystring');
 const BASE = { hostname: 'localhost', port: 3000 };
+const db = require('../db');
 
 function request(path, method='GET', headers={}, body=null){
   return new Promise((resolve) => {
@@ -47,15 +48,54 @@ function request(path, method='GET', headers={}, body=null){
   const cookieHeader = setCookie ? setCookie.map(c=>c.split(';')[0]).join('; ') : '';
 
   // GET shopping
+  // Pre-seed a product with stock so the test can add it (avoids depending on repo data)
+  const seedName = `E2E Seed ${ts}`;
+  try {
+    const insertSql = 'INSERT INTO products (productName, quantity, price, image) VALUES (?, ?, ?, ?)';
+    const insertRes = await new Promise((resolve) => db.query(insertSql, [seedName, 10, 1.99, ''], (err, r) => resolve({ err, r })));
+    if (insertRes && insertRes.err) console.error('Seed product insert error', insertRes.err);
+    else if (insertRes && insertRes.r) console.log('Seed product id', insertRes.r.insertId);
+  } catch (e) {
+    console.error('Error seeding product:', e.message);
+  }
+
   console.log('\nE2E TEST: 4) GET /shopping');
   const shop = await request('/shopping', 'GET', cookieHeader ? { 'Cookie': cookieHeader } : {});
   if (shop.error) { console.error('Shopping error', shop.error); return; }
   console.log('shopping', shop.statusCode, 'len', shop.body.length);
 
-  // Find first add-to-cart endpoint
-  const match = shop.body.match(/action="\/add-to-cart\/(\d+)"/i);
-  if (!match) { console.error('No add-to-cart form found on shopping page'); return; }
-  const productId = match[1];
+  // Find a product that is "in stock" (preferable) otherwise pick first add-to-cart
+  let productId = null;
+  try {
+    const body = shop.body;
+    // find all "<number> in stock" matches and map to nearest add-to-cart id before them
+    const stockRegex = /(\d+)\s+in stock/gi;
+    let m;
+    while ((m = stockRegex.exec(body)) !== null) {
+      const qty = parseInt(m[1], 10);
+      const idx = m.index;
+      if (qty > 0) {
+        const before = body.lastIndexOf('action="/add-to-cart/', idx);
+        if (before !== -1) {
+          const sub = body.slice(before, idx);
+          const idMatch = sub.match(/action="\/add-to-cart\/(\d+)"/i);
+          if (idMatch) {
+            productId = idMatch[1];
+            break;
+          }
+        }
+      }
+    }
+    // Fallback: first add-to-cart
+    if (!productId) {
+      const match = body.match(/action="\/add-to-cart\/(\d+)"/i);
+      if (match) productId = match[1];
+    }
+  } catch (e) {
+    console.error('Error parsing shopping page for product id:', e.message);
+  }
+
+  if (!productId) { console.error('No add-to-cart form found on shopping page'); return; }
   console.log('Found product id to add:', productId);
 
   // POST add-to-cart

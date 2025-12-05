@@ -4,7 +4,7 @@
     <button class="btn btn-outline-light me-2" id="sidebarToggle" aria-label="Toggle sidebar">
       <span class="navbar-toggler-icon"></span>
     </button>
-    <a class="navbar-brand" href="/">Supermarket</a>
+    <a class="navbar-brand" href="/">Supermarket App</a>
 
     <div class="ms-auto d-flex align-items-center">
       <% if (!user) { %>
@@ -12,6 +12,7 @@
         <a class="btn btn-sm btn-light" href="/login">Login</a>
       <% } else { %>
         <span class="me-3 text-light">Hello, <strong><%= user.username %></strong></span>
+        <button id="chatToggle" class="btn btn-sm btn-outline-light me-2">Chat</button>
         <a class="btn btn-sm btn-outline-light" href="/logout">Logout</a>
       <% } %>
     </div>

@@ -135,8 +135,8 @@ app.get('/deleteProduct/:id', ProductController.deleteProduct);
 
 app.post('/checkout', checkAuthenticated, CartController.checkout);
 
-// AI Chat endpoint
-app.post('/api/chat', checkAuthenticated, ChatController.chat);
+// AI Chat endpoint (open to public for general queries; controller still checks session for user-specific responses)
+app.post('/api/chat', ChatController.chat);
 
 app.get('/order-history', checkAuthenticated, OrderController.getOrderHistory);
 

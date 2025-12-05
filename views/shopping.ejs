@@ -13,17 +13,11 @@
     </style>
 
     <div class="welcome-text mb-4">Welcome, <strong><%= (typeof user !== 'undefined' && user) ? user.username : 'Guest' %></strong>!</div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="page-title mb-0">Browse Products</h2>
-      <div class="d-flex gap-2 align-items-center">
-        <input type="text" id="searchInput" placeholder="Search by first letter (e.g. A)" onkeyup="filterProducts()" class="form-control" style="width:220px;">
-        <select id="productSort" class="form-select" style="width:220px;">
-          <option value="name-asc">Name A → Z</option>
-          <option value="name-desc">Name Z → A</option>
-          <option value="price-asc">Price Low → High</option>
-          <option value="price-desc">Price High → Low</option>
-        </select>
-      </div>
+    <h2 class="page-title">Browse Products</h2>
+
+    <div class="search-section">
+      <input type="text" id="searchInput" placeholder="Search by first letter (e.g. A)" onkeyup="filterProducts()">
+      <button onclick="resetSearch()">Reset</button>
     </div>
 
     <% if(products.length > 0) { %>
@@ -78,27 +72,5 @@
   }
   function resetSearch() { document.getElementById('searchInput').value = ''; filterProducts(); }
   document.addEventListener('DOMContentLoaded', function() { document.querySelectorAll('select[id^="quantity-"]').forEach(select => { select.addEventListener('change', function() { const productId = this.id.replace('quantity-', ''); document.getElementById('qty-' + productId).value = this.value; }); }); });
-</script>
-
-<script>
-  // Product sort client-side
-  document.addEventListener('DOMContentLoaded', function(){
-    const sort = document.getElementById('productSort');
-    if (!sort) return;
-    const grid = document.getElementById('productGrid');
-    sort.addEventListener('change', function(){
-      if (!grid) return;
-      const cards = Array.from(grid.querySelectorAll('.product-card'));
-      const getName = c => c.querySelector('.product-name').textContent.trim().toLowerCase();
-      const getPrice = c => parseFloat(c.querySelector('.product-price').textContent.replace('$','')) || 0;
-      let sorted = cards;
-      if (sort.value === 'name-asc') sorted = cards.sort((a,b)=> getName(a).localeCompare(getName(b)));
-      if (sort.value === 'name-desc') sorted = cards.sort((a,b)=> getName(b).localeCompare(getName(a)));
-      if (sort.value === 'price-asc') sorted = cards.sort((a,b)=> getPrice(a)-getPrice(b));
-      if (sort.value === 'price-desc') sorted = cards.sort((a,b)=> getPrice(b)-getPrice(a));
-      grid.innerHTML = '';
-      sorted.forEach(c => grid.appendChild(c));
-    });
-  });
 </script>
 

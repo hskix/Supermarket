@@ -3,7 +3,7 @@
 
 <div class="container">
   <div id="mainContent">
-    <div class="hero text-center mt-3" style="background-image: url('/images/spbg.jpg'); background-size: cover; background-position: center; border-radius:12px; padding:40px;">
+    <div class="text-center mt-3">
       <% if (user) {%>
         <div class="welcome-text mb-4">Welcome, <strong><%= user.username %></strong></div>
         <% if (user.role === "admin") { %>
@@ -19,9 +19,9 @@
             <a href="/shopping" class="btn btn-primary mt-3">Start Shopping</a>
           </div>
         <% } %>
-        <% } else { %>
-        <div class="alert alert-warning" style="margin-top: 40px; background: rgba(255,255,255,0.8);">
-          <h2 class="mb-4">Welcome to Supermarket</h2>
+      <% } else { %>
+        <div class="alert alert-warning" style="margin-top: 40px;">
+          <h2 class="mb-4">Welcome to Supermarket App</h2>
           <p class="lead mb-4">Your one-stop shop for all your grocery needs</p>
           <p class="mb-4">Please login or register to get started</p>
           <div class="mt-4">
@@ -31,7 +31,7 @@
         </div>
       <% } %>
     </div>
-    </div>
+  </div>
 </div>
 
 <%- include('partials/footer') %>

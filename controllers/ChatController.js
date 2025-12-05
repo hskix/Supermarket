@@ -55,6 +55,28 @@ exports.chat = async (req, res) => {
       }
     }
 
+    // Product-specific queries: "is apples in stock?", "how many bananas left?"
+    const prodMatch1 = message.match(/(?:is|are)\s+([\w\s\-']{2,50})\s+(?:in stock|available)\??$/i);
+    const prodMatch2 = message.match(/how many\s+([\w\s\-']{2,50})\s+(?:left|remaining|in stock)\??/i);
+    if (prodMatch1 || prodMatch2) {
+      const name = (prodMatch1 ? prodMatch1[1] : prodMatch2[1]).trim();
+      try {
+        const rows = await query('SELECT id, productName, quantity FROM products WHERE productName LIKE ? LIMIT 1', [`%${name}%`]);
+        if (!rows || rows.length === 0) {
+          return res.json({ success: true, reply: `I couldn't find a product matching "${name}".` });
+        }
+        const p = rows[0];
+        if (p.quantity > 0) {
+          return res.json({ success: true, reply: `Yes — ${p.productName} has ${p.quantity} unit(s) available.` });
+        } else {
+          return res.json({ success: true, reply: `Sorry — ${p.productName} is currently out of stock.` });
+        }
+      } catch (e) {
+        console.error('Chat DB error (product lookup):', e);
+        return res.json({ success: false, reply: 'Error looking up the product.' });
+      }
+    }
+
     // How many products in my cart?
     if (lower.includes('in my cart') || lower.includes('products in my cart') || lower.includes('how many in my cart')) {
       if (!req.session || !req.session.user) return res.json({ success: false, reply: 'Please log in to view your cart.' });
