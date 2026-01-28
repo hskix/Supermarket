@@ -2,6 +2,7 @@ const Product = require('../models/Product');
 const Cart = require('../models/Cart');
 const Order = require('../models/Order');
 const db = require('../db');
+const paypal = require('../services/paypal');
 
 // Get cart
 exports.getCart = (req, res) => {
@@ -140,6 +141,8 @@ exports.getCartTotal = (req, res) => {
 // Checkout - decrease stock and clear cart
 exports.checkout = (req, res) => {
     const userId = req.session.user.id;
+    const paymentMethod = req.body.payment_method;
+    const paypalConfirmed = req.body.paypal_confirmed === 'true';
 
     // Step 1: Get all cart items
     Cart.getCart(userId, (error, cartItems) => {
@@ -160,6 +163,22 @@ exports.checkout = (req, res) => {
 
         // Calculate total
         const total = cartItems.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+        if (paymentMethod === 'nets') {
+            return res.render('nets-payment', {
+                cartItems: cartItems,
+                total: total.toFixed(2),
+                user: req.session.user
+            });
+        }
+        if (paymentMethod === 'paypal' && !paypalConfirmed) {
+            return res.render('paypal-payment', {
+                cartItems: cartItems,
+                total: total.toFixed(2),
+                user: req.session.user,
+                paypalClientId: process.env.PAYPAL_CLIENT_ID || '',
+                paypalCurrency: process.env.PAYPAL_CURRENCY || ''
+            });
+        }
 
         // Use DB transaction to ensure atomic checkout and avoid race conditions
         db.beginTransaction((txErr) => {
@@ -251,5 +270,74 @@ exports.checkout = (req, res) => {
             });
         });
     });
+};
+
+// Finalize NETS payment checkout after success
+exports.finalizeNetsCheckout = (req, res) => {
+    if (!req.session.netsPaid) {
+        req.flash('error', 'NETS payment not completed.');
+        return res.redirect('/cart');
+    }
+    req.session.netsPaid = false;
+    req.body.payment_method = 'standard';
+    exports.checkout(req, res);
+};
+
+exports.createPayPalOrder = async (req, res) => {
+    try {
+        const userId = req.session.user.id;
+
+        Cart.getCart(userId, async (error, cartItems) => {
+            if (error) {
+                console.error('Error fetching cart:', error);
+                return res.status(500).json({ error: 'Error creating PayPal order' });
+            }
+
+            if (!cartItems || cartItems.length === 0) {
+                return res.status(400).json({ error: 'Cart is empty' });
+            }
+
+            const total = cartItems.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+            const order = await paypal.createOrder(total.toFixed(2));
+            if (order && order.id) {
+                return res.json({ id: order.id });
+            }
+            return res.status(500).json({ error: 'PayPal order creation failed', details: order });
+        });
+    } catch (err) {
+        console.error('PayPal create order error:', err);
+        return res.status(500).json({ error: err.message });
+    }
+};
+
+exports.capturePayPalOrder = async (req, res) => {
+    try {
+        const { orderID } = req.body;
+
+        if (!orderID) {
+            return res.status(400).json({ error: 'Missing orderID' });
+        }
+
+        const capture = await paypal.captureOrder(orderID);
+        if (capture && capture.status === 'COMPLETED') {
+            req.session.paypalPaid = true;
+            return res.json({ status: capture.status });
+        }
+        return res.status(400).json({ error: 'PayPal payment not completed', details: capture });
+    } catch (err) {
+        console.error('PayPal capture error:', err);
+        return res.status(500).json({ error: err.message });
+    }
+};
+
+exports.finalizePaypalCheckout = (req, res) => {
+    if (!req.session.paypalPaid) {
+        req.flash('error', 'PayPal payment not completed.');
+        return res.redirect('/cart');
+    }
+    req.session.paypalPaid = false;
+    req.body.payment_method = 'paypal';
+    req.body.paypal_confirmed = 'true';
+    exports.checkout(req, res);
 };
 

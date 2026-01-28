@@ -1,0 +1,15 @@
+#Use the API key from OPENAPIPASS
+API_KEY=01fce872-d07e-4527-bd6a-000d46918bba
+
+#Use the Project id from OPENAPIPASS
+PROJECT_ID=Jarr7ZxDD1vvCTtiybZq
+
+# PayPal
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+PAYPAL_API=https://api.sandbox.paypal.com
+PAYPAL_CURRENCY=USD
+NETS_QR_REQUEST_URL=your_nets_request_url
+NETS_QR_QUERY_URL=your_nets_query_url
+API_KEY=your_openapipass_api_key
+PROJECT_ID=your_openapipass_project_id

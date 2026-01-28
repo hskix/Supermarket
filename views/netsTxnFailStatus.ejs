@@ -1,0 +1,23 @@
+<%- include('partials/head') %>
+<%- include('partials/navbar', { user: (typeof user !== 'undefined' ? user : null) }) %>
+
+<div class="container">
+  <div id="mainContent">
+    <div class="text-center mt-3">
+      <div class="alert alert-danger" role="alert">
+        <h2 class="mb-3">NETS Payment Failed</h2>
+        <p><%= message %></p>
+        <% if (error) { %>
+          <div class="text-muted">Reason: <%= error %></div>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="mt-4 text-center">
+      <a href="/cart" class="btn btn-secondary me-2">Back to Cart</a>
+      <a href="/shopping" class="btn btn-primary">Continue Shopping</a>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

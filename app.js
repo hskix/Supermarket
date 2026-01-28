@@ -2,12 +2,14 @@ const express = require('express');
 const session = require('express-session');
 const flash = require('connect-flash');
 const multer = require('multer');
+require('dotenv').config();
 const db = require('./db');
 const ProductController = require('./controllers/ProductController');
 const UserController = require('./controllers/UserController');
 const CartController = require('./controllers/CartController');
 const OrderController = require('./controllers/OrderController');
 const ChatController = require('./controllers/ChatController');
+const netsQr = require('./services/nets');
 const app = express();
 
 // Set up multer for file uploads
@@ -134,6 +136,98 @@ app.post('/updateProduct/:id', upload.single('image'), ProductController.updateP
 app.get('/deleteProduct/:id', ProductController.deleteProduct);
 
 app.post('/checkout', checkAuthenticated, CartController.checkout);
+app.post('/checkout/nets/confirm', checkAuthenticated, CartController.finalizeNetsCheckout);
+app.post('/checkout/paypal/confirm', checkAuthenticated, CartController.finalizePaypalCheckout);
+app.post('/paypal/create-order', checkAuthenticated, CartController.createPayPalOrder);
+app.post('/paypal/capture-order', checkAuthenticated, CartController.capturePayPalOrder);
+
+app.post('/generateNETSQR', checkAuthenticated, netsQr.generateQrCode);
+app.get('/nets-qr/success', checkAuthenticated, (req, res) => {
+    res.render('netsTxnSuccessStatus', { message: 'Transaction Successful!', txnRetrievalRef: req.query.txnRetrievalRef || '' });
+});
+app.get('/nets-qr/fail', checkAuthenticated, (req, res) => {
+    res.render('netsTxnFailStatus', { message: 'Transaction Failed. Please try again.', error: req.query.error || '' });
+});
+
+// Server-Sent Events endpoint for NETS payment status updates
+app.get('/sse/payment-status/:txnRetrievalRef', checkAuthenticated, async (req, res) => {
+    res.set({
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    const txnRetrievalRef = req.params.txnRetrievalRef;
+    const queryUrl = process.env.NETS_QR_QUERY_URL;
+    const apiKey = process.env.API_KEY;
+    const projectId = process.env.PROJECT_ID;
+
+    if (!queryUrl || !apiKey || !projectId) {
+        const timeout = setTimeout(() => {
+            res.write(`data: ${JSON.stringify({ success: true, mock: true })}\n\n`);
+            res.end();
+        }, 1500);
+
+        req.on('close', () => clearTimeout(timeout));
+        return;
+    }
+
+    let pollCount = 0;
+    const maxPolls = 60;
+    let frontendTimeoutStatus = 0;
+
+    const interval = setInterval(async () => {
+        pollCount++;
+
+        try {
+            const response = await fetch(queryUrl, {
+                method: 'POST',
+                headers: {
+                    'api-key': apiKey,
+                    'project-id': projectId,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    txn_retrieval_ref: txnRetrievalRef,
+                    frontend_timeout_status: frontendTimeoutStatus
+                })
+            });
+
+            const data = await response.json();
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+            const resData = data && data.result && data.result.data;
+            if (resData && resData.response_code === '00' && resData.txn_status === 1) {
+                req.session.netsPaid = true;
+                res.write(`data: ${JSON.stringify({ success: true })}\n\n`);
+                clearInterval(interval);
+                res.end();
+            } else if (frontendTimeoutStatus === 1 && resData && (resData.response_code !== '00' || resData.txn_status === 2)) {
+                req.session.netsPaid = false;
+                res.write(`data: ${JSON.stringify({ fail: true, ...resData })}\n\n`);
+                clearInterval(interval);
+                res.end();
+            }
+        } catch (err) {
+            req.session.netsPaid = false;
+            clearInterval(interval);
+            res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+            res.end();
+        }
+
+        if (pollCount >= maxPolls) {
+            clearInterval(interval);
+            frontendTimeoutStatus = 1;
+            req.session.netsPaid = false;
+            res.write(`data: ${JSON.stringify({ fail: true, error: 'Timeout' })}\n\n`);
+            res.end();
+        }
+    }, 5000);
+
+    req.on('close', () => {
+        clearInterval(interval);
+    });
+});
 
 // AI Chat endpoint (open to public for general queries; controller still checks session for user-specific responses)
 app.post('/api/chat', ChatController.chat);

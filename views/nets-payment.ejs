@@ -1,0 +1,121 @@
+<%- include('partials/head') %>
+<%- include('partials/navbar', { user: (typeof user !== 'undefined' ? user : null) }) %>
+
+<div class="container">
+  <div id="mainContent">
+    <div class="text-center mt-3">
+      <div class="alert alert-info" role="alert">
+        <h2 class="mb-3">NETS QR Payment</h2>
+        <p>Generate a NETS QR code and complete payment to finish checkout.</p>
+      </div>
+    </div>
+
+    <div class="invoice">
+      <div class="invoice-header">
+        <div>
+          <div class="invoice-title">PAYMENT SUMMARY</div>
+          <p style="color: var(--muted); margin:5px 0 0 0;">Supermarket App</p>
+        </div>
+        <div class="order-number">
+          <h3>Total $<%= total %></h3>
+        </div>
+      </div>
+
+      <div class="invoice-section">
+        <div class="invoice-section-title">Order Items</div>
+        <table class="item-table">
+          <thead>
+            <tr><th>Product</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Total</th></tr>
+          </thead>
+          <tbody>
+            <% cartItems.forEach(item => { %>
+              <tr>
+                <td><%= item.productName %></td>
+                <td style="text-align:center"><%= item.quantity %></td>
+                <td style="text-align:right">$<%= parseFloat(item.unit_price).toFixed(2) %></td>
+                <td style="text-align:right"><strong>$<%= (item.quantity * item.unit_price).toFixed(2) %></strong></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="invoice-section">
+        <div class="invoice-section-title">NETS QR</div>
+        <div class="d-flex flex-column align-items-center gap-2">
+          <button id="generateNetsBtn" class="btn btn-primary">Generate NETS QR</button>
+          <div id="netsStatus" class="text-muted">Awaiting QR generation.</div>
+          <div id="netsRef" class="text-muted"></div>
+          <pre id="netsPayload" class="p-2 bg-light border rounded" style="display:none; max-width:100%; overflow:auto;"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-4 text-center">
+      <a href="/cart" class="btn btn-secondary me-2">Back to Cart</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const amount = "<%= total %>";
+  const generateBtn = document.getElementById('generateNetsBtn');
+  const statusEl = document.getElementById('netsStatus');
+  const refEl = document.getElementById('netsRef');
+  const payloadEl = document.getElementById('netsPayload');
+
+  function showPayload(text) {
+    if (!text) return;
+    payloadEl.textContent = text;
+    payloadEl.style.display = 'block';
+  }
+
+  generateBtn.addEventListener('click', async () => {
+    generateBtn.disabled = true;
+    statusEl.textContent = 'Generating NETS QR...';
+
+    try {
+      const response = await fetch('/generateNETSQR', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amount })
+      });
+
+      const data = await response.json();
+      const txnRef = data.txnRetrievalRef || data.txn_retrieval_ref || (data.result && data.result.data && data.result.data.txn_retrieval_ref);
+      const qrPayload = data.qrPayload || data.qr_payload || (data.result && data.result.data && data.result.data.qr_payload);
+
+      if (!txnRef) {
+        statusEl.textContent = 'Unable to retrieve transaction reference.';
+        generateBtn.disabled = false;
+        return;
+      }
+
+      refEl.textContent = 'Transaction Ref: ' + txnRef;
+      showPayload(qrPayload || 'NETS QR payload ready.');
+      statusEl.textContent = 'Waiting for payment confirmation...';
+
+      const sse = new EventSource('/sse/payment-status/' + encodeURIComponent(txnRef));
+      sse.onmessage = (event) => {
+        const msg = JSON.parse(event.data || '{}');
+        if (msg.success) {
+          sse.close();
+          window.location.href = '/nets-qr/success?txnRetrievalRef=' + encodeURIComponent(txnRef);
+        } else if (msg.fail) {
+          sse.close();
+          const err = msg.error || 'Payment failed';
+          window.location.href = '/nets-qr/fail?error=' + encodeURIComponent(err);
+        } else if (msg.error) {
+          sse.close();
+          statusEl.textContent = 'Error: ' + msg.error;
+          generateBtn.disabled = false;
+        }
+      };
+    } catch (err) {
+      statusEl.textContent = 'Error: ' + err.message;
+      generateBtn.disabled = false;
+    }
+  });
+</script>
+
+<%- include('partials/footer') %>

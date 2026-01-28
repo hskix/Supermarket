@@ -1,0 +1,88 @@
+<%- include('partials/head') %>
+<%- include('partials/navbar', { user: (typeof user !== 'undefined' ? user : null) }) %>
+
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-md-9">
+      <div class="card shadow-sm p-4">
+        <h2 class="mb-3">PayPal Payment</h2>
+        <p>Complete your payment with PayPal to finish checkout.</p>
+
+        <div class="invoice mt-4">
+          <div class="invoice-title">PAYMENT SUMMARY</div>
+        <div class="invoice-item">
+          <strong>Total</strong>
+          <span><%= paypalCurrency ? (paypalCurrency + ' ') : '' %><%= total %></span>
+        </div>
+        </div>
+
+        <div class="mt-4">
+          <div class="invoice-section-title">PayPal</div>
+          <div id="paypal-button-container"></div>
+          <div id="paypal-status" class="text-muted mt-2">Ready to pay.</div>
+        </div>
+
+        <form id="paypalConfirmForm" action="/checkout/paypal/confirm" method="POST" style="display:none;">
+          <input type="hidden" name="paypal_confirmed" value="true">
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.paypal.com/sdk/js?client-id=<%= paypalClientId %><% if (paypalCurrency) { %>&currency=<%= paypalCurrency %><% } %>"></script>
+<script>
+  const statusEl = document.getElementById('paypal-status');
+  const confirmForm = document.getElementById('paypalConfirmForm');
+
+  if (!'<%= paypalClientId %>') {
+    statusEl.textContent = 'PayPal client ID not configured.';
+  } else {
+    paypal.Buttons({
+      createOrder: () => {
+        statusEl.textContent = 'Creating PayPal order...';
+        return fetch('/paypal/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.error) {
+              throw new Error(data.error);
+            }
+            return data.id;
+          })
+          .catch(err => {
+            statusEl.textContent = 'Failed to create PayPal order.';
+            throw err;
+          });
+      },
+      onApprove: (data) => {
+        statusEl.textContent = 'Capturing PayPal payment...';
+        return fetch('/paypal/capture-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderID: data.orderID })
+        })
+          .then(res => res.json())
+          .then(details => {
+            if (details.error || details.status !== 'COMPLETED') {
+              throw new Error(details.error || 'Payment not completed');
+            }
+            statusEl.textContent = 'Payment captured. Finalizing checkout...';
+            confirmForm.submit();
+          })
+          .catch(err => {
+            statusEl.textContent = 'Payment failed. Please try again.';
+            console.error(err);
+          });
+      },
+      onError: (err) => {
+        statusEl.textContent = 'PayPal error. Please try again.';
+        console.error(err);
+      }
+    }).render('#paypal-button-container');
+  }
+</script>
+
+<%- include('partials/footer') %>
