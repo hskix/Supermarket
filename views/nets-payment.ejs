@@ -46,6 +46,7 @@
           <button id="generateNetsBtn" class="btn btn-primary">Generate NETS QR</button>
           <div id="netsStatus" class="text-muted">Awaiting QR generation.</div>
           <div id="netsRef" class="text-muted"></div>
+          <img id="netsQrImg" alt="NETS QR Code" style="display:none; max-width:280px; width:100%; border:1px solid #e0e0e0; border-radius:8px; padding:8px; background:#fff;" />
           <pre id="netsPayload" class="p-2 bg-light border rounded" style="display:none; max-width:100%; overflow:auto;"></pre>
         </div>
       </div>
@@ -63,11 +64,18 @@
   const statusEl = document.getElementById('netsStatus');
   const refEl = document.getElementById('netsRef');
   const payloadEl = document.getElementById('netsPayload');
+  const qrImgEl = document.getElementById('netsQrImg');
 
   function showPayload(text) {
     if (!text) return;
     payloadEl.textContent = text;
     payloadEl.style.display = 'block';
+  }
+
+  function showQrImage(base64Png) {
+    if (!base64Png) return;
+    qrImgEl.src = 'data:image/png;base64,' + base64Png;
+    qrImgEl.style.display = 'block';
   }
 
   generateBtn.addEventListener('click', async () => {
@@ -78,12 +86,13 @@
       const response = await fetch('/generateNETSQR', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: amount })
+        body: JSON.stringify({ amount: amount, amt_in_dollars: Number(amount) })
       });
 
       const data = await response.json();
       const txnRef = data.txnRetrievalRef || data.txn_retrieval_ref || (data.result && data.result.data && data.result.data.txn_retrieval_ref);
       const qrPayload = data.qrPayload || data.qr_payload || (data.result && data.result.data && data.result.data.qr_payload);
+      const qrCode = data.qr_code || (data.result && data.result.data && data.result.data.qr_code);
 
       if (!txnRef) {
         statusEl.textContent = 'Unable to retrieve transaction reference.';
@@ -92,7 +101,8 @@
       }
 
       refEl.textContent = 'Transaction Ref: ' + txnRef;
-      showPayload(qrPayload || 'NETS QR payload ready.');
+      showQrImage(qrCode);
+      showPayload(qrPayload || (qrCode ? '' : 'NETS QR payload ready.'));
       statusEl.textContent = 'Waiting for payment confirmation...';
 
       const sse = new EventSource('/sse/payment-status/' + encodeURIComponent(txnRef));
