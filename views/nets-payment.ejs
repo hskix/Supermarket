@@ -43,7 +43,8 @@
       <div class="invoice-section">
         <div class="invoice-section-title">NETS QR</div>
         <div class="d-flex flex-column align-items-center gap-2">
-          <button id="generateNetsBtn" class="btn btn-primary">Generate NETS QR</button>
+          <button id="generateNetsBtn" class="btn btn-primary">Pay with NETS QR</button>
+          <div id="netsCountdown" class="text-muted" style="display:none;">Time remaining: <span id="netsCountdownValue">05:00</span></div>
           <div id="netsStatus" class="text-muted">Awaiting QR generation.</div>
           <div id="netsRef" class="text-muted"></div>
           <img id="netsQrImg" alt="NETS QR Code" style="display:none; max-width:280px; width:100%; border:1px solid #e0e0e0; border-radius:8px; padding:8px; background:#fff;" />
@@ -65,6 +66,13 @@
   const refEl = document.getElementById('netsRef');
   const payloadEl = document.getElementById('netsPayload');
   const qrImgEl = document.getElementById('netsQrImg');
+  const countdownEl = document.getElementById('netsCountdown');
+  const countdownValueEl = document.getElementById('netsCountdownValue');
+  let sse = null;
+  let countdownTimer = null;
+  let deadline = null;
+  let expired = false;
+  let currentTxnRef = '';
 
   function showPayload(text) {
     if (!text) return;
@@ -76,6 +84,42 @@
     if (!base64Png) return;
     qrImgEl.src = 'data:image/png;base64,' + base64Png;
     qrImgEl.style.display = 'block';
+  }
+
+  function formatTime(ms) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return minutes + ':' + seconds;
+  }
+
+  function updateCountdown() {
+    if (!deadline) return;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      countdownValueEl.textContent = 'Expired';
+      handleExpiry();
+      return;
+    }
+    countdownValueEl.textContent = formatTime(remaining);
+  }
+
+  async function handleExpiry() {
+    if (expired) return;
+    expired = true;
+    if (sse) sse.close();
+    if (countdownTimer) clearInterval(countdownTimer);
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'QR expired, generate a new one';
+    statusEl.textContent = 'Timed out';
+    try {
+      if (currentTxnRef) {
+        await fetch('/sse/payment-status/' + encodeURIComponent(currentTxnRef) + '?frontend_timeout_status=1');
+      }
+    } catch (err) {
+      // Ignore final timeout query failures.
+    }
+    window.location.href = '/nets-qr/fail?reason=timeout';
   }
 
   generateBtn.addEventListener('click', async () => {
@@ -100,23 +144,34 @@
         return;
       }
 
+      currentTxnRef = txnRef;
       refEl.textContent = 'Transaction Ref: ' + txnRef;
       showQrImage(qrCode);
       showPayload(qrPayload || (qrCode ? '' : 'NETS QR payload ready.'));
-      statusEl.textContent = 'Waiting for payment confirmation...';
+      statusEl.textContent = 'Waiting for payment…';
+      countdownEl.style.display = 'block';
+      countdownValueEl.textContent = '05:00';
+      deadline = Date.now() + (5 * 60 * 1000);
+      expired = false;
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(updateCountdown, 1000);
+      updateCountdown();
 
-      const sse = new EventSource('/sse/payment-status/' + encodeURIComponent(txnRef));
+      sse = new EventSource('/sse/payment-status/' + encodeURIComponent(txnRef));
       sse.onmessage = (event) => {
         const msg = JSON.parse(event.data || '{}');
         if (msg.success) {
           sse.close();
+          if (countdownTimer) clearInterval(countdownTimer);
           window.location.href = '/nets-qr/success?txnRetrievalRef=' + encodeURIComponent(txnRef);
         } else if (msg.fail) {
           sse.close();
+          if (countdownTimer) clearInterval(countdownTimer);
           const err = msg.error || 'Payment failed';
           window.location.href = '/nets-qr/fail?error=' + encodeURIComponent(err);
         } else if (msg.error) {
           sse.close();
+          if (countdownTimer) clearInterval(countdownTimer);
           statusEl.textContent = 'Error: ' + msg.error;
           generateBtn.disabled = false;
         }

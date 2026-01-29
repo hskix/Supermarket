@@ -146,35 +146,51 @@ app.get('/nets-qr/success', checkAuthenticated, (req, res) => {
     res.render('netsTxnSuccessStatus', { message: 'Transaction Successful!', txnRetrievalRef: req.query.txnRetrievalRef || '' });
 });
 app.get('/nets-qr/fail', checkAuthenticated, (req, res) => {
-    res.render('netsTxnFailStatus', { message: 'Transaction Failed. Please try again.', error: req.query.error || '' });
+    const reason = req.query.error || req.query.reason || '';
+    res.render('netsTxnFailStatus', { message: 'Transaction Failed. Please try again.', error: reason });
 });
 
 // Server-Sent Events endpoint for NETS payment status updates
 app.get('/sse/payment-status/:txnRetrievalRef', checkAuthenticated, async (req, res) => {
+    const txnRetrievalRef = req.params.txnRetrievalRef;
+    const queryUrl = process.env.NETS_QR_QUERY_URL;
+    const apiKey = process.env.API_KEY;
+    const projectId = process.env.PROJECT_ID;
+    const frontendTimeoutStatus = req.query.frontend_timeout_status === '1' ? 1 : 0;
+
+    if (!queryUrl || !apiKey || !projectId) {
+        return res.status(500).json({ error: 'NETS QR not configured' });
+    }
+
+    if (frontendTimeoutStatus === 1) {
+        try {
+            const response = await fetch(queryUrl, {
+                method: 'POST',
+                headers: {
+                    'api-key': apiKey,
+                    'project-id': projectId,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    txn_retrieval_ref: txnRetrievalRef,
+                    frontend_timeout_status: 1
+                })
+            });
+            const data = await response.json();
+            return res.status(response.ok ? 200 : response.status).json(data);
+        } catch (err) {
+            return res.status(500).json({ error: err.message });
+        }
+    }
+
     res.set({
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive'
     });
 
-    const txnRetrievalRef = req.params.txnRetrievalRef;
-    const queryUrl = process.env.NETS_QR_QUERY_URL;
-    const apiKey = process.env.API_KEY;
-    const projectId = process.env.PROJECT_ID;
-
-    if (!queryUrl || !apiKey || !projectId) {
-        const timeout = setTimeout(() => {
-            res.write(`data: ${JSON.stringify({ success: true, mock: true })}\n\n`);
-            res.end();
-        }, 1500);
-
-        req.on('close', () => clearTimeout(timeout));
-        return;
-    }
-
     let pollCount = 0;
     const maxPolls = 60;
-    let frontendTimeoutStatus = 0;
 
     const interval = setInterval(async () => {
         pollCount++;
@@ -189,7 +205,7 @@ app.get('/sse/payment-status/:txnRetrievalRef', checkAuthenticated, async (req, 
                 },
                 body: JSON.stringify({
                     txn_retrieval_ref: txnRetrievalRef,
-                    frontend_timeout_status: frontendTimeoutStatus
+                    frontend_timeout_status: 0
                 })
             });
 
@@ -202,11 +218,6 @@ app.get('/sse/payment-status/:txnRetrievalRef', checkAuthenticated, async (req, 
                 res.write(`data: ${JSON.stringify({ success: true })}\n\n`);
                 clearInterval(interval);
                 res.end();
-            } else if (frontendTimeoutStatus === 1 && resData && (resData.response_code !== '00' || resData.txn_status === 2)) {
-                req.session.netsPaid = false;
-                res.write(`data: ${JSON.stringify({ fail: true, ...resData })}\n\n`);
-                clearInterval(interval);
-                res.end();
             }
         } catch (err) {
             req.session.netsPaid = false;
@@ -217,7 +228,6 @@ app.get('/sse/payment-status/:txnRetrievalRef', checkAuthenticated, async (req, 
 
         if (pollCount >= maxPolls) {
             clearInterval(interval);
-            frontendTimeoutStatus = 1;
             req.session.netsPaid = false;
             res.write(`data: ${JSON.stringify({ fail: true, error: 'Timeout' })}\n\n`);
             res.end();
